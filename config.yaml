@@ -1,0 +1,5 @@
+telegram:
+  token: "7350577031:AAHUg8KkDvYgnoHN4lT3jCShns4eBXf3O-8"
+  channel_id: "-1002195444815"
+database:
+  file: "cats.db"
