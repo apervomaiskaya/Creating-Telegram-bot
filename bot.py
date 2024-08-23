@@ -1,29 +1,31 @@
-import warnings
-import httpx
 import logging
+import httpx
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 # Настройка логирования
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO,
+    handlers=[
+        logging.FileHandler("bot.log"),  # Логи будут записываться в bot.log
+        logging.StreamHandler()  # Логи будут также выводиться в консоль
+    ]
 )
 logger = logging.getLogger(__name__)
 
-# Определяем ID вашего канала
-CHANNEL_ID = '-1002195444815'  # замените на ваш реальный ID канала
+# ID вашего канала для уведомлений
+CHANNEL_ID = '-1002195444815'
 
-# URL для получения случайного фото кота
-CAT_API_URL = "https://api.thecatapi.com/v1/images/search"
-
-# Определяем обработчик команды /start
+# Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Отправляем пользователю приветственное сообщение
+    # non_existent_variable = 1 / 0  # Это вызовет деление на ноль и исключение
     await update.message.reply_text('Hello!')
+    logger.info(f"Пользователь {update.effective_user.first_name} начал взаимодействие с ботом.")
 
-# Определяем обработчик команды /help
+
+# Команда /help
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Текст, который будет отправлен в ответ на команду /help
     help_text = (
         "Вот доступные команды:\n"
         "/start - Запустить бота и получить приветственное сообщение.\n"
@@ -31,40 +33,36 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/cat - Получить случайное фото кота.\n"
         "/send_message - Отправить сообщение в канал.\n"
     )
-    # Отправляем сообщение с текстом помощи
     await update.message.reply_text(help_text)
+    logger.info(f"Пользователь {update.effective_user.first_name} запросил помощь.")
 
-# Обработчик для команды /cat
+# Команда /cat
 async def cat_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    async with httpx.AsyncClient() as client:
-        response = await client.get(CAT_API_URL)
-        response.raise_for_status()  # Проверка на ошибки запроса
-        cat_data = response.json()
-        
-        # Получаем URL первого изображения из ответа
-        cat_photo_url = cat_data[0]['url']
-        await update.message.reply_photo(photo=cat_photo_url)
+    try:
+        response = httpx.get("https://api.thecatapi.com/v1/images/search")
+        response.raise_for_status()
+        cat_image_url = response.json()[0]["url"]
+        await update.message.reply_photo(photo=cat_image_url)
+        logger.info(f"Пользователь {update.effective_user.first_name} получил случайное фото кота.")
+    except httpx.HTTPStatusError as e:
+        await update.message.reply_text("Не удалось получить фото кота.")
+        logger.error(f"Ошибка при получении фото кота: {e}")
+        # Уведомить вас в канал о проблеме
+        await context.bot.send_message(chat_id=CHANNEL_ID, text=f"Произошла ошибка: {e}")
 
-# Обработчик для команды /send_message
+# Команда /send_message
 async def send_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Текст сообщения для отправки в канал
     message_text = "Это тестовое сообщение отправлено ботом в канал!"
-    
-    # Отправляем сообщение в канал
     await context.bot.send_message(chat_id=CHANNEL_ID, text=message_text)
-    
-    # Отправляем подтверждение пользователю
     await update.message.reply_text("Сообщение отправлено в канал.")
+    logger.info(f"Сообщение отправлено в канал.")
 
 if __name__ == '__main__':
-    # Создаем приложение Telegram с использованием токена вашего бота
     application = ApplicationBuilder().token('7350577031:AAHUg8KkDvYgnoHN4lT3jCShns4eBXf3O-8').build()
 
-    # Добавляем обработчики команд в приложение
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('help', help_command))
     application.add_handler(CommandHandler('cat', cat_command))
     application.add_handler(CommandHandler('send_message', send_message))
 
-    # Запускаем бота
     application.run_polling()
